@@ -1,0 +1,25 @@
+Package: dccmidas
+Type: Package
+Title: DCC Models with GARCH-MIDAS Specifications in the Univariate
+        Step
+Version: 0.1.0
+Authors@R: person("Vincenzo", "Candila", email="vincenzo.candila@uniroma1.it", role=c("aut", "cre"))
+Description: Estimates a variety of Dynamic Conditional Correlation (DCC) models. More in detail, the 'dccmidas' package allows the estimation of the corrected DCC (cDCC) of Aielli (2013) <doi:10.1080/07350015.2013.771027>, the DCC-MIDAS of Colacito et al. (2011) <doi:10.1016/j.jeconom.2011.02.013>, the Asymmetric DCC of Cappiello et al. <doi:10.1093/jjfinec/nbl005>, and the Dynamic Equicorrelation (DECO) of Engle and Kelly (2012) <doi:10.1080/07350015.2011.652048>. 'dccmidas' offers the possibility of including standard GARCH <doi:10.1016/0304-4076(86)90063-1>, GARCH-MIDAS <doi:10.1162/REST_a_00300> and Double Asymmetric GARCH-MIDAS <doi:10.1016/j.econmod.2018.07.025> models in the univariate estimation. Finally, the package calculates also the var-cov matrix under two non-parametric models: the Moving Covariance and the RiskMetrics specifications.
+License: GPL-3
+LinkingTo: Rcpp, RcppArmadillo
+Encoding: UTF-8
+LazyData: true
+RoxygenNote: 7.1.1
+RdMacros: Rdpack
+Depends: R (>= 4.0.0)
+Imports: Rcpp (>= 1.0.5), maxLik (>= 1.3-8), rumidas (>= 0.1.1),
+        rugarch (>= 1.4-4), roll (>= 1.1.4), xts (>= 0.12.0), tseries
+        (>= 0.10.47), Rdpack (>= 1.0.0), lubridate (>= 1.7.9), zoo (>=
+        1.8.8), stats (>= 4.0.2), utils (>= 4.0.2)
+Suggests: knitr, rmarkdown
+NeedsCompilation: yes
+Packaged: 2021-03-12 23:03:28 UTC; Vincenzo
+Author: Vincenzo Candila [aut, cre]
+Maintainer: Vincenzo Candila <vincenzo.candila@uniroma1.it>
+Repository: CRAN
+Date/Publication: 2021-03-15 10:00:07 UTC

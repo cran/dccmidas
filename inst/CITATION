@@ -1,0 +1,18 @@
+## R >= 2.8.0 passes package metadata to citation().
+if(!exists("meta") || is.null(meta)) meta <- packageDescription("dccmidas")
+
+year <- 2021
+note <- sprintf("R package version %s.", meta$Version)
+
+citEntry(entry="Manual",
+         title = "dccmidas: A package for estimating DCC-based models in {R}",
+         author = personList(as.person("Vincenzo Candila")),
+         year         = year,
+         note         = note,
+         textVersion = 
+         paste("Vincenzo Candila",
+               sprintf("(%s).", year),
+               "dccmidas: A package for estimating DCC-based models in {R}.",
+	       note),
+	 header = "To cite the dccmidas package, please use:"
+)
