@@ -1,12 +1,12 @@
 ## R >= 2.8.0 passes package metadata to citation().
 if(!exists("meta") || is.null(meta)) meta <- packageDescription("dccmidas")
 
-year <- 2021
+year <- 2024
 note <- sprintf("R package version %s.", meta$Version)
 
-citEntry(entry="Manual",
+bibentry(bibtype="Manual",
          title = "dccmidas: A package for estimating DCC-based models in {R}",
-         author = personList(as.person("Vincenzo Candila")),
+         author = c("Vincenzo Candila"),
          year         = year,
          note         = note,
          textVersion = 

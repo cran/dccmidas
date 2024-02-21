@@ -200,77 +200,78 @@ return(results)
 
 }
 
-#' Obtains the matrix H_t, under the Moving Covariance model
-#'
-#' Obtains the matrix H_t, under the Moving Covariance model.
-#' @param rt List of daily returns
-#' @param V  Length of the rolling window adopted
-#' @return A list with the \eqn{H_t} matrix, for each \eqn{t}.
-#' @importFrom Rdpack reprompt
-#' @keywords internal
-#' @export
-
-moving_cov_est<-function(rt,V){
-
-rt_m<-data.frame(matrix(unlist(rt), nrow=length(rt), byrow=T))
-
-##### index
-
-Num_col<-dim(rt_m)[1]		# number of assets
-TT<-dim(rt_m)[2]			# number of daily observations
-
-##### matrices 
-
-S<-stats::cov(t(rt_m))
-H_t<-array(S,dim=c(Num_col,Num_col,TT))
-
-##### cycle
-
-for(tt in (V+1):TT){
-X<-rt_m[,(tt-1):(tt-V)]
-
-arr<-array(apply(X, 2, function (x) outer(x,x)), dim=c(Num_col,Num_col,V))
-H_t[,,tt]<-apply( arr , 1:2 , mean )
-
-}
-
-results<-list(
-"H_t"=H_t
-)
-
-return(results)
-
-}
-
 #' RiskMetrics model
 #'
 #' Obtains the matrix H_t, under the RiskMetrics model.
-#' @param rt List of daily returns
+#' @param r_t List of daily returns
 #' @param lambda **optional** Decay parameter. Default to 0.94
 #' @return A list with the \eqn{H_t} matrix, for each \eqn{t}.
 #' @importFrom Rdpack reprompt
-#' @keywords internal
+#' \donttest{
+#' require(xts)
+#' # close to close daily log-returns
+#' r_t_s<-diff(log(sp500['2010/2019'][,3]))
+#' r_t_s[1]<-0
+#' r_t_n<-diff(log(nasdaq['2010/2019'][,3]))
+#' r_t_n[1]<-0
+#' r_t_f<-diff(log(ftse100['2010/2019'][,3]))
+#' r_t_f[1]<-0
+#' db_m<-merge.xts(r_t_s,r_t_n,r_t_f)
+#' db_m<-db_m[complete.cases(db_m),]
+#' colnames(db_m)<-c("S&P500","NASDAQ","FTSE100")
+#' # list of returns
+#' r_t<-list(db_m[,1],db_m[,2],db_m[,3])
+#' RM<-riskmetrics_mat(r_t)
+#' }
 #' @export
 
-riskmetrics_est<-function(rt,lambda=0.94){
 
-rt_m<-data.frame(matrix(unlist(rt), nrow=length(rt), byrow=T))
+riskmetrics_mat<-function(r_t,lambda=0.94){
 
-##### index
+################################### checks
 
-Num_col<-dim(rt_m)[1]		# number of assets
-TT<-dim(rt_m)[2]			# number of daily observations
+cond_r_t<- class(r_t)
+
+if(cond_r_t != "list") { stop(
+cat("#Warning:\n Parameter 'r_t' must be a list object. Please provide it in the correct form \n")
+)}
+
+if(lambda<0|lambda>1) { stop(
+cat("#Warning:\n Parameter 'lambda' must be in the interval 0-1 \n")
+)}
+
+
+################################### merge (eventually)
+
+k<-length(r_t)
+
+len<-rep(NA,k)
+
+for(i in 1:k){
+len[i]<-length(r_t[[i]])
+}
+
+db<- do.call(xts::merge.xts,r_t)
+db<-db[stats::complete.cases(db),] 
+
+for(i in 1:k){
+colnames(db)[i]<-colnames(r_t[[i]])
+}
+
+TT<-nrow(db)
+
+db<-zoo::coredata(db)
 
 ##### matrices and vectors
 
-S<-stats::cov(t(rt_m))
-H_t<-array(S,dim=c(Num_col,Num_col,TT))
-Prod_r_t<-array(0,dim=c(Num_col,Num_col,TT))
+S<-stats::cov(db)
+H_t<-array(S,dim=c(k,k,TT))
+Prod_r_t<-array(0,dim=c(k,k,TT))
 
 ##### cycle
 
 for(tt in (2):TT){
-Prod_r_t[,,tt-1]<-rt_m[,(tt-1)]%*%t(rt_m[,(tt-1)])
+Prod_r_t[,,tt-1]<-db[(tt-1),]%*%t(db[(tt-1),])
 H_t[,,tt]<-lambda*Prod_r_t[,,tt-1] + (1-lambda)*H_t[,,tt-1]
 }
 
@@ -286,33 +287,77 @@ return(results)
 #' Moving Covariance model
 #'
 #' Obtains the matrix H_t, under the Moving Covariance model.
-#' @param rt List of daily returns
-#' @param V  Length of the rolling window adopted
+#' @param r_t List of daily returns
+#' @param V  Length of the rolling window adopted. By default, V is 22
 #' @return A list with the \eqn{H_t} matrix, for each \eqn{t}.
 #' @importFrom Rdpack reprompt
-#' @keywords internal
+#' @examples
+#' \donttest{
+#' require(xts)
+#' # close to close daily log-returns
+#' r_t_s<-diff(log(sp500['2010/2019'][,3]))
+#' r_t_s[1]<-0
+#' r_t_n<-diff(log(nasdaq['2010/2019'][,3]))
+#' r_t_n[1]<-0
+#' r_t_f<-diff(log(ftse100['2010/2019'][,3]))
+#' r_t_f[1]<-0
+#' db_m<-merge.xts(r_t_s,r_t_n,r_t_f)
+#' db_m<-db_m[complete.cases(db_m),]
+#' colnames(db_m)<-c("S&P500","NASDAQ","FTSE100")
+#' # list of returns
+#' r_t<-list(db_m[,1],db_m[,2],db_m[,3])
+#' MC<-moving_cov(r_t,V=60)
+#' }
 #' @export
 
-moving_cov_est<-function(rt,V){
+moving_cov<-function(r_t,V=22){
 
-rt_m<-data.frame(matrix(unlist(rt), nrow=length(rt), byrow=T))
+################################### checks
 
-##### index
+cond_r_t<- class(r_t)
 
-Num_col<-dim(rt_m)[1]		# number of assets
-TT<-dim(rt_m)[2]			# number of daily observations
+if(cond_r_t != "list") { stop(
+cat("#Warning:\n Parameter 'r_t' must be a list object. Please provide it in the correct form \n")
+)}
 
-##### matrices 
+if(V<length(r_t))
+ { stop(
+cat("#Warning:\n Parameter 'V' must be greater than the number of assets in r_t \n")
+)}
 
-S<-stats::cov(t(rt_m))
-H_t<-array(S,dim=c(Num_col,Num_col,TT))
+
+################################### merge (eventually)
+
+k<-length(r_t)
+
+len<-rep(NA,k)
+
+for(i in 1:k){
+len[i]<-length(r_t[[i]])
+}
+
+
+db<-do.call(xts::merge.xts,r_t)
+db<-db[stats::complete.cases(db),] 
+
+for(i in 1:k){
+colnames(db)[i]<-colnames(r_t[[i]])
+}
+
+TT<-nrow(db)
+
+db<-zoo::coredata(db)
+
+##### matrices and vectors
+
+S<-stats::cov(db)
+H_t<-array(S,dim=c(k,k,TT))
 
 ##### cycle
 
 for(tt in (V+1):TT){
-X<-rt_m[,(tt-1):(tt-V)]
-
-arr<-array(apply(X, 2, function (x) outer(x,x)), dim=c(Num_col,Num_col,V))
+X<-db[(tt-1):(tt-V),]
+arr<-array(apply(X, 1, function (x)  tcrossprod(x)), dim=c(k,k,V))
 H_t[,,tt]<-apply( arr , 1:2 , mean )
 
 }
@@ -325,6 +370,735 @@ return(results)
 
 }
 
+#' sBEKK log-likelihood 
+#'
+#' Obtains the log-likelihood of the scalar BEKK model.
+#' @param param Vector of starting values. 
+#' @param ret Txk matrix of daily returns. At the moment, k can be at most 5
+#' @return The resulting vector is the log-likelihood value for each \eqn{t}.
+#' @importFrom Rdpack reprompt
+#' @references
+#' \insertAllCited{} 
+#' @keywords internal
+#' @export
+
+sBEKK_loglik<-function(param,ret){
+
+##### index
+
+k<-ncol(ret)		# number of assets
+TT<-nrow(ret)		# number of daily observations
+
+if(k==2){
+
+c_11<-param[1]
+c_21<-param[2]
+c_22<-param[3]
+a<-param[4]
+b<-param[5]
+
+C_mat<-matrix(0,ncol=k,nrow=k)
+
+C_mat[1,1]<-c_11
+C_mat[2,1]<-c_21
+C_mat[2,2]<-c_22
+
+} else if (k==3){
+
+C_mat<-matrix(0,ncol=k,nrow=k)
+
+c_11<-param[1]
+c_21<-param[2]
+c_22<-param[3]
+c_31<-param[4]
+c_32<-param[5]
+c_33<-param[6]
+a<-param[7]
+b<-param[8]
+
+C_mat[1,1]<-c_11
+C_mat[2,1]<-c_21
+C_mat[2,2]<-c_22
+C_mat[3,1]<-c_31
+C_mat[3,2]<-c_32
+C_mat[3,3]<-c_33
+
+} else if (k==4){
+
+C_mat<-matrix(0,ncol=k,nrow=k)
+
+c_11<-param[1]
+c_21<-param[2]
+c_22<-param[3]
+c_31<-param[4]
+c_32<-param[5]
+c_33<-param[6]
+c_41<-param[7]
+c_42<-param[8]
+c_43<-param[9]
+c_44<-param[10]
+a<-param[11]
+b<-param[12]
+
+C_mat[1,1]<-c_11
+C_mat[2,1]<-c_21
+C_mat[2,2]<-c_22
+C_mat[3,1]<-c_31
+C_mat[3,2]<-c_32
+C_mat[3,3]<-c_33
+C_mat[4,1]<-c_41
+C_mat[4,2]<-c_42
+C_mat[4,3]<-c_43
+C_mat[4,4]<-c_44
+
+} else if (k==5){
+
+C_mat<-matrix(0,ncol=k,nrow=k)
+
+c_11<-param[1]
+c_21<-param[2]
+c_22<-param[3]
+c_31<-param[4]
+c_32<-param[5]
+c_33<-param[6]
+c_41<-param[7]
+c_42<-param[8]
+c_43<-param[9]
+c_44<-param[10]
+c_51<-param[11]
+c_52<-param[12]
+c_53<-param[13]
+c_54<-param[14]
+c_55<-param[15]
+a<-param[16]
+b<-param[17]
+
+C_mat[1,1]<-c_11
+C_mat[2,1]<-c_21
+C_mat[2,2]<-c_22
+C_mat[3,1]<-c_31
+C_mat[3,2]<-c_32
+C_mat[3,3]<-c_33
+C_mat[4,1]<-c_41
+C_mat[4,2]<-c_42
+C_mat[4,3]<-c_43
+C_mat[4,4]<-c_44
+C_mat[5,1]<-c_51
+C_mat[5,2]<-c_52
+C_mat[5,3]<-c_53
+C_mat[5,4]<-c_54
+C_mat[5,5]<-c_55
+
+}
+
+W<-C_mat%*%t(C_mat)
+
+##### matrices and vectors
+
+H_0<-stats::cov(ret)
+
+H_t<-array(NA,dim=c(k,k,TT))
+H_t[,,1]<-H_0
+log_det_H_t<-rep(0,TT)
+
+ret_H_t_solved_ret<-rep(0,TT)
+
+
+################# likelihood
+
+ll<-rep(0,TT)
+
+for(tt in 2:TT){
+Cross_prod<-tcrossprod(ret[tt-1,],ret[tt-1,])
+H_t[,,tt]<-W+a^2*Cross_prod+b^2*H_t[,,tt-1]
+log_det_H_t[tt]<-log(Det(H_t[,,tt]))
+H_t_solved<-Inv(H_t[,,tt])
+ret_H_t_solved_ret[tt]<-(ret[tt,])%*%H_t_solved%*%cbind(ret[tt,])
+}
+
+ll<- - (log_det_H_t+ret_H_t_solved_ret)
+
+#sum(ll)
+
+return(ll)
+
+}
+
+#' sBEKK covariance matrix
+#'
+#' Obtains the conditional covariance matrix from the scalar BEKK model.
+#' @param param Vector of starting values. 
+#' @param ret Txk matrix of daily returns. At the moment, k can be at most 5
+#' @return The resulting vector is the log-likelihood value for each \eqn{t}.
+#' @importFrom Rdpack reprompt
+#' @references
+#' \insertAllCited{} 
+#' @keywords internal
+#' @export
+
+sBEKK_mat_est<-function(param,ret){
+
+
+##### index
+
+k<-ncol(ret)		# number of assets
+TT<-nrow(ret)		# number of daily observations
+
+if(k==2){
+
+c_11<-param[1]
+c_21<-param[2]
+c_22<-param[3]
+a<-param[4]
+b<-param[5]
+
+C_mat<-matrix(0,ncol=k,nrow=k)
+
+C_mat[1,1]<-c_11
+C_mat[2,1]<-c_21
+C_mat[2,2]<-c_22
+
+} else if (k==3){
+
+C_mat<-matrix(0,ncol=k,nrow=k)
+
+c_11<-param[1]
+c_21<-param[2]
+c_22<-param[3]
+c_31<-param[4]
+c_32<-param[5]
+c_33<-param[6]
+a<-param[7]
+b<-param[8]
+
+C_mat[1,1]<-c_11
+C_mat[2,1]<-c_21
+C_mat[2,2]<-c_22
+C_mat[3,1]<-c_31
+C_mat[3,2]<-c_32
+C_mat[3,3]<-c_33
+
+} else if (k==4){
+
+C_mat<-matrix(0,ncol=k,nrow=k)
+
+c_11<-param[1]
+c_21<-param[2]
+c_22<-param[3]
+c_31<-param[4]
+c_32<-param[5]
+c_33<-param[6]
+c_41<-param[7]
+c_42<-param[8]
+c_43<-param[9]
+c_44<-param[10]
+a<-param[11]
+b<-param[12]
+
+C_mat[1,1]<-c_11
+C_mat[2,1]<-c_21
+C_mat[2,2]<-c_22
+C_mat[3,1]<-c_31
+C_mat[3,2]<-c_32
+C_mat[3,3]<-c_33
+C_mat[4,1]<-c_41
+C_mat[4,2]<-c_42
+C_mat[4,3]<-c_43
+C_mat[4,4]<-c_44
+
+
+} else if (k==5){
+
+C_mat<-matrix(0,ncol=k,nrow=k)
+
+c_11<-param[1]
+c_21<-param[2]
+c_22<-param[3]
+c_31<-param[4]
+c_32<-param[5]
+c_33<-param[6]
+c_41<-param[7]
+c_42<-param[8]
+c_43<-param[9]
+c_44<-param[10]
+c_51<-param[11]
+c_52<-param[12]
+c_53<-param[13]
+c_54<-param[14]
+c_55<-param[15]
+a<-param[16]
+b<-param[17]
+
+C_mat[1,1]<-c_11
+C_mat[2,1]<-c_21
+C_mat[2,2]<-c_22
+C_mat[3,1]<-c_31
+C_mat[3,2]<-c_32
+C_mat[3,3]<-c_33
+C_mat[4,1]<-c_41
+C_mat[4,2]<-c_42
+C_mat[4,3]<-c_43
+C_mat[4,4]<-c_44
+C_mat[5,1]<-c_51
+C_mat[5,2]<-c_52
+C_mat[5,3]<-c_53
+C_mat[5,4]<-c_54
+C_mat[5,5]<-c_55
+
+}
+
+
+W<-C_mat%*%t(C_mat)
+
+##### matrices and vectors
+
+H_0<-stats::cov(ret)
+
+H_t<-array(NA,dim=c(k,k,TT))
+H_t[,,1]<-H_0
+
+################# cov-est
+
+for(tt in 2:TT){
+Cross_prod<-tcrossprod(ret[tt-1,],ret[tt-1,])
+H_t[,,tt]<-W+a^2*Cross_prod+b^2*H_t[,,tt-1]
+}
+
+return(H_t)
+
+}
+
+
+#' dBEKK log-likelihood 
+#'
+#' Obtains the log-likelihood of the diagonal BEKK model.
+#' @param param Vector of starting values. 
+#' @param ret Txk matrix of daily returns. At the moment, k can be at most 5
+#' @return The resulting vector is the log-likelihood value for each \eqn{t}.
+#' @importFrom Rdpack reprompt
+#' @references
+#' \insertAllCited{} 
+#' @keywords internal
+#' @export
+
+dBEKK_loglik<-function(param,ret){
+
+##### index
+
+k<-ncol(ret)		# number of assets
+TT<-nrow(ret)		# number of daily observations
+
+if(k==2){
+
+c_11<-param[1]
+c_21<-param[2]
+c_22<-param[3]
+a_11<-param[4]
+a_22<-param[5]
+b_11<-param[6]
+b_22<-param[7]
+
+A_mat<-B_mat<-C_mat<-matrix(0,ncol=k,nrow=k)
+
+C_mat[1,1]<-c_11
+C_mat[2,1]<-c_21
+C_mat[2,2]<-c_22
+
+A_mat[1,1]<-a_11
+A_mat[2,2]<-a_22
+
+B_mat[1,1]<-b_11
+B_mat[2,2]<-b_22
+
+
+} else if (k==3){
+
+A_mat<-B_mat<-C_mat<-matrix(0,ncol=k,nrow=k)
+
+c_11<-param[1]
+c_21<-param[2]
+c_22<-param[3]
+c_31<-param[4]
+c_32<-param[5]
+c_33<-param[6]
+a_11<-param[7]
+a_22<-param[8]
+a_33<-param[9]
+b_11<-param[10]
+b_22<-param[11]
+b_33<-param[12]
+
+C_mat[1,1]<-c_11
+C_mat[2,1]<-c_21
+C_mat[2,2]<-c_22
+C_mat[3,1]<-c_31
+C_mat[3,2]<-c_32
+C_mat[3,3]<-c_33
+
+
+A_mat[1,1]<-a_11
+A_mat[2,2]<-a_22
+A_mat[3,3]<-a_33
+
+B_mat[1,1]<-b_11
+B_mat[2,2]<-b_22
+B_mat[3,3]<-b_33
+
+} else if (k==4){
+
+A_mat<-B_mat<-C_mat<-matrix(0,ncol=k,nrow=k)
+
+c_11<-param[1]
+c_21<-param[2]
+c_22<-param[3]
+c_31<-param[4]
+c_32<-param[5]
+c_33<-param[6]
+c_41<-param[7]
+c_42<-param[8]
+c_43<-param[9]
+c_44<-param[10]
+
+a_11<-param[11]
+a_22<-param[12]
+a_33<-param[13]
+a_44<-param[14]
+
+b_11<-param[15]
+b_22<-param[16]
+b_33<-param[17]
+b_44<-param[18]
+
+C_mat[1,1]<-c_11
+C_mat[2,1]<-c_21
+C_mat[2,2]<-c_22
+C_mat[3,1]<-c_31
+C_mat[3,2]<-c_32
+C_mat[3,3]<-c_33
+C_mat[4,1]<-c_41
+C_mat[4,2]<-c_42
+C_mat[4,3]<-c_43
+C_mat[4,4]<-c_44
+
+A_mat[1,1]<-a_11
+A_mat[2,2]<-a_22
+A_mat[3,3]<-a_33
+A_mat[4,4]<-a_44
+
+B_mat[1,1]<-b_11
+B_mat[2,2]<-b_22
+B_mat[3,3]<-b_33
+B_mat[4,4]<-b_44
+
+} else if (k==5){
+
+A_mat<-B_mat<-C_mat<-matrix(0,ncol=k,nrow=k)
+
+c_11<-param[1]
+c_21<-param[2]
+c_22<-param[3]
+c_31<-param[4]
+c_32<-param[5]
+c_33<-param[6]
+c_41<-param[7]
+c_42<-param[8]
+c_43<-param[9]
+c_44<-param[10]
+c_51<-param[11]
+c_52<-param[12]
+c_53<-param[13]
+c_54<-param[14]
+c_55<-param[15]
+
+a_11<-param[16]
+a_22<-param[17]
+a_33<-param[18]
+a_44<-param[19]
+a_55<-param[20]
+
+b_11<-param[21]
+b_22<-param[22]
+b_33<-param[23]
+b_44<-param[24]
+b_55<-param[25]
+
+C_mat[1,1]<-c_11
+C_mat[2,1]<-c_21
+C_mat[2,2]<-c_22
+C_mat[3,1]<-c_31
+C_mat[3,2]<-c_32
+C_mat[3,3]<-c_33
+C_mat[4,1]<-c_41
+C_mat[4,2]<-c_42
+C_mat[4,3]<-c_43
+C_mat[4,4]<-c_44
+C_mat[5,1]<-c_51
+C_mat[5,2]<-c_52
+C_mat[5,3]<-c_53
+C_mat[5,4]<-c_54
+C_mat[5,5]<-c_55
+
+A_mat[1,1]<-a_11
+A_mat[2,2]<-a_22
+A_mat[3,3]<-a_33
+A_mat[4,4]<-a_44
+A_mat[5,5]<-a_55
+
+B_mat[1,1]<-b_11
+B_mat[2,2]<-b_22
+B_mat[3,3]<-b_33
+B_mat[4,4]<-b_44
+B_mat[5,5]<-b_55
+
+}
+
+
+W<-C_mat%*%t(C_mat)
+
+##### matrices and vectors
+
+H_0<-stats::cov(ret)
+
+H_t<-array(NA,dim=c(k,k,TT))
+H_t[,,1]<-H_0
+log_det_H_t<-rep(0,TT)
+
+ret_H_t_solved_ret<-rep(0,TT)
+
+
+################# likelihood
+
+ll<-rep(0,TT)
+
+for(tt in 2:TT){
+Cross_prod<-tcrossprod(ret[tt-1,],ret[tt-1,])
+H_t[,,tt]<-W+A_mat%*%Cross_prod%*%t(A_mat)+B_mat%*%H_t[,,tt-1]%*%t(B_mat)
+log_det_H_t[tt]<-log(Det(H_t[,,tt]))
+H_t_solved_1<-suppressWarnings(
+tryCatch(Inv(H_t[,,tt]), error = function(e) return(NA))
+)
+if (all(is.na(H_t_solved_1))){
+ret_H_t_solved_ret[tt] <- Inf
+} else{
+H_t_solved<-H_t_solved_1
+ret_H_t_solved_ret[tt]<-(ret[tt,])%*%H_t_solved%*%cbind(ret[tt,])
+}
+
+}
+
+
+ll<- - (log_det_H_t+ret_H_t_solved_ret)
+
+#sum(ll)
+
+return(ll)
+
+}
+
+#' dBEKK covariance matrix
+#'
+#' Obtains the conditional covariance matrix from the diagonal BEKK model.
+#' @param param Vector of starting values. 
+#' @param ret Txk matrix of daily returns. At the moment, k can be at most 4
+#' @return The resulting vector is the log-likelihood value for each \eqn{t}.
+#' @importFrom Rdpack reprompt
+#' @references
+#' \insertAllCited{} 
+#' @keywords internal
+#' @export
+
+dBEKK_mat_est<-function(param,ret){
+
+
+##### index
+
+k<-ncol(ret)		# number of assets
+TT<-nrow(ret)		# number of daily observations
+
+if(k==2){
+
+c_11<-param[1]
+c_21<-param[2]
+c_22<-param[3]
+a_11<-param[4]
+a_22<-param[5]
+b_11<-param[6]
+b_22<-param[7]
+
+A_mat<-B_mat<-C_mat<-matrix(0,ncol=k,nrow=k)
+
+C_mat[1,1]<-c_11
+C_mat[2,1]<-c_21
+C_mat[2,2]<-c_22
+
+A_mat[1,1]<-a_11
+A_mat[2,2]<-a_22
+
+B_mat[1,1]<-b_11
+B_mat[2,2]<-b_22
+
+
+} else if (k==3){
+
+A_mat<-B_mat<-C_mat<-matrix(0,ncol=k,nrow=k)
+
+c_11<-param[1]
+c_21<-param[2]
+c_22<-param[3]
+c_31<-param[4]
+c_32<-param[5]
+c_33<-param[6]
+a_11<-param[7]
+a_22<-param[8]
+a_33<-param[9]
+b_11<-param[10]
+b_22<-param[11]
+b_33<-param[12]
+
+C_mat[1,1]<-c_11
+C_mat[2,1]<-c_21
+C_mat[2,2]<-c_22
+C_mat[3,1]<-c_31
+C_mat[3,2]<-c_32
+C_mat[3,3]<-c_33
+
+
+A_mat[1,1]<-a_11
+A_mat[2,2]<-a_22
+A_mat[3,3]<-a_33
+
+B_mat[1,1]<-b_11
+B_mat[2,2]<-b_22
+B_mat[3,3]<-b_33
+
+} else if (k==4){
+
+A_mat<-B_mat<-C_mat<-matrix(0,ncol=k,nrow=k)
+
+c_11<-param[1]
+c_21<-param[2]
+c_22<-param[3]
+c_31<-param[4]
+c_32<-param[5]
+c_33<-param[6]
+c_41<-param[7]
+c_42<-param[8]
+c_43<-param[9]
+c_44<-param[10]
+
+a_11<-param[11]
+a_22<-param[12]
+a_33<-param[13]
+a_44<-param[14]
+
+b_11<-param[15]
+b_22<-param[16]
+b_33<-param[17]
+b_44<-param[18]
+
+C_mat[1,1]<-c_11
+C_mat[2,1]<-c_21
+C_mat[2,2]<-c_22
+C_mat[3,1]<-c_31
+C_mat[3,2]<-c_32
+C_mat[3,3]<-c_33
+C_mat[4,1]<-c_41
+C_mat[4,2]<-c_42
+C_mat[4,3]<-c_43
+C_mat[4,4]<-c_44
+
+A_mat[1,1]<-a_11
+A_mat[2,2]<-a_22
+A_mat[3,3]<-a_33
+A_mat[4,4]<-a_44
+
+B_mat[1,1]<-b_11
+B_mat[2,2]<-b_22
+B_mat[3,3]<-b_33
+B_mat[4,4]<-b_44
+
+} else if (k==5){
+
+A_mat<-B_mat<-C_mat<-matrix(0,ncol=k,nrow=k)
+
+c_11<-param[1]
+c_21<-param[2]
+c_22<-param[3]
+c_31<-param[4]
+c_32<-param[5]
+c_33<-param[6]
+c_41<-param[7]
+c_42<-param[8]
+c_43<-param[9]
+c_44<-param[10]
+c_51<-param[11]
+c_52<-param[12]
+c_53<-param[13]
+c_54<-param[14]
+c_55<-param[15]
+
+a_11<-param[16]
+a_22<-param[17]
+a_33<-param[18]
+a_44<-param[19]
+a_55<-param[20]
+
+b_11<-param[21]
+b_22<-param[22]
+b_33<-param[23]
+b_44<-param[24]
+b_55<-param[25]
+
+C_mat[1,1]<-c_11
+C_mat[2,1]<-c_21
+C_mat[2,2]<-c_22
+C_mat[3,1]<-c_31
+C_mat[3,2]<-c_32
+C_mat[3,3]<-c_33
+C_mat[4,1]<-c_41
+C_mat[4,2]<-c_42
+C_mat[4,3]<-c_43
+C_mat[4,4]<-c_44
+C_mat[5,1]<-c_51
+C_mat[5,2]<-c_52
+C_mat[5,3]<-c_53
+C_mat[5,4]<-c_54
+C_mat[5,5]<-c_55
+
+A_mat[1,1]<-a_11
+A_mat[2,2]<-a_22
+A_mat[3,3]<-a_33
+A_mat[4,4]<-a_44
+A_mat[5,5]<-a_55
+
+B_mat[1,1]<-b_11
+B_mat[2,2]<-b_22
+B_mat[3,3]<-b_33
+B_mat[4,4]<-b_44
+B_mat[5,5]<-b_55
+
+}
+
+
+W<-C_mat%*%t(C_mat)
+
+##### matrices and vectors
+
+H_0<-stats::cov(ret)
+
+H_t<-array(NA,dim=c(k,k,TT))
+H_t[,,1]<-H_0
+
+################# cov-est
+
+for(tt in 2:TT){
+Cross_prod<-tcrossprod(ret[tt-1,],ret[tt-1,])
+H_t[,,tt]<-W+A_mat%*%Cross_prod%*%t(A_mat)+B_mat%*%H_t[,,tt-1]%*%t(B_mat)
+}
+
+return(H_t)
+
+}
 
 
 #' cDCC log-likelihood (second step)
@@ -402,8 +1176,9 @@ return(ll)
 #'
 #' Obtains the matrix H_t and R_t, under the cDCC model
 #' For details, see \insertCite{aielli2013dynamic;textual}{dccmidas} and \insertCite{dcc_engle_2002;textual}{dccmidas}.
-#' @param param Vector of estimated values. 
-#' @param res Array of standardized daily returns, coming from the first step estimation.
+#' @param est_param Vector of estimated values 
+#' @param res Array of standardized daily returns, coming from the first step estimation
+#' @param Dt Diagonal matrix of standard deviations
 #' @param K_c **optional** Number of initial observations to exclude from the H_t and R_t calculation
 #' @return A list with the \eqn{H_t} and \eqn{R_t} matrices, for each \eqn{t}.
 #' @importFrom Rdpack reprompt
@@ -541,8 +1316,9 @@ return(ll)
 #'
 #' Obtains the matrix H_t and R_t, under the A-DCC model
 #' For details, see \insertCite{cappiello2006asymmetric;textual}{dccmidas} and \insertCite{dcc_engle_2002;textual}{dccmidas}.
-#' @param param Vector of estimated values. 
-#' @param res Array of standardized daily returns, coming from the first step estimation.
+#' @param est_param Vector of estimated values
+#' @param res Array of standardized daily returns, coming from the first step estimation
+#' @param Dt Diagonal matrix of standard deviations
 #' @param K_c **optional** Number of initial observations to exclude from the H_t and R_t calculation
 #' @return A list with the \eqn{H_t} and \eqn{R_t} matrices, for each \eqn{t}.
 #' @importFrom Rdpack reprompt
@@ -894,8 +1670,9 @@ return(ll)
 #'
 #' Obtains the matrix H_t and R_t, under the DECO model
 #' For details, see \insertCite{engle2012dynamic;textual}{dccmidas}.
-#' @param param Vector of estimated values. 
-#' @param res Array of standardized daily returns, coming from the first step estimation.
+#' @param est_param Vector of estimated values
+#' @param res Array of standardized daily returns, coming from the first step estimation
+#' @param Dt Diagonal matrix of standard deviations
 #' @param K_c **optional** Number of initial observations to exclude from the H_t and R_t calculation
 #' @return A list with the \eqn{H_t} and \eqn{R_t} matrices, for each \eqn{t}.
 #' @importFrom Rdpack reprompt
@@ -983,7 +1760,7 @@ QMLE_sd<-function(est){
 
 ############### QMLE standard errors (-H)^-1 OPG (-H)^-1
 
-H_hat_inv<- solve(-hessian(est))
+H_hat_inv<- solve(-maxLik::hessian(est))
 OPG<-t(est$gradientObs)%*%est$gradientObs
 
 return(diag(H_hat_inv%*%OPG%*%H_hat_inv)^0.5)
@@ -1200,6 +1977,7 @@ cat("\n"))
 #' MIDAS term and/or if 'corr_model' is "DCCMIDAS"
 #' @param N_c **optional** Number of (lagged) realizations to use for the standarized residuals forming the long-run correlation, if 'corr_model' is "DCCMIDAS"
 #' @param K_c **optional** Number of (lagged) realizations to use for the long-run correlation, if 'corr_model' is "DCCMIDAS"
+#' @param out_of_sample **optional** A positive integer indicating the number of periods before the last to keep for out of sample forecasting
 #' @return \code{dcc_fit} returns an object of class 'dccmidas'. The function \code{\link{summary.dccmidas}} 
 #' can be used to print a summary of the results. Moreover, an object of class 'dccmidas' is a list containing the following components:
 #' \itemize{
@@ -1209,12 +1987,15 @@ cat("\n"))
 #'    \item corr_coef_mat: Matrix of estimated coefficients of the correlation model, with the QML standard errors.
 #'    \item mult_model: Correlation model used in the second step.
 #'   \item obs: The number of daily observations used for the estimation.
-#'   \item period: The period of the estimation.
+#'   \item period: The period of the (in-sample) estimation.
 #'   \item H_t: Conditional covariance matrix, reported as an array.
 #'	\item R_t: Conditional correlation matrix, reported as an array.
 #'	\item R_t_bar: Conditional long-run correlation matrix, reported as an array, if the correlation matrix includes a MIDAS specification.
+#'   \item H_t_oos: Conditional covariance matrix, reported as an array, for the out-of-sample period, if present.
+#'	\item R_t_oos: Conditional correlation matrix, reported as an array, for the out-of-sample period, if present.
+#'	\item R_t_bar_oos: Conditional long-run correlation matrix, reported as an array, if the correlation matrix includes a MIDAS specification, for the out-of-sample period, if present.
 #'   \item est_time: Time of estimation.
-#'    \item Days: Days of the sample period.
+#'    \item Days: Days of the (in-)sample period.
 #'    \item llk: The value of the log-likelihood (for the second step) at the maximum.
 #' }
 #' @importFrom Rdpack reprompt
@@ -1238,10 +2019,14 @@ cat("\n"))
 #' @examples
 #' \donttest{
 #' require(xts)
-#' # open to close daily log-returns
-#' r_t_s<-log(sp500['2005/2008'][,3])-log(sp500['2005/2008'][,1])
-#' r_t_n<-log(nasdaq['2005/2008'][,3])-log(nasdaq['2005/2008'][,1])
-#' r_t_f<-log(ftse100['2005/2008'][,3])-log(ftse100['2005/2008'][,1])
+#' # daily log-returns
+#' # close to close daily log-returns
+#' r_t_s<-diff(log(sp500['2010/2019'][,3]))
+#' r_t_s[1]<-0
+#' r_t_n<-diff(log(nasdaq['2010/2019'][,3]))
+#' r_t_n[1]<-0
+#' r_t_f<-diff(log(ftse100['2010/2019'][,3]))
+#' r_t_f[1]<-0
 #' db_m<-merge.xts(r_t_s,r_t_n,r_t_f)
 #' db_m<-db_m[complete.cases(db_m),]
 #' colnames(db_m)<-c("S&P500","NASDAQ","FTSE100")
@@ -1263,7 +2048,7 @@ cat("\n"))
 #' @export
 
 dcc_fit<-function(r_t,univ_model="sGARCH",distribution="norm",
-MV=NULL,K=NULL,corr_model="cDCC",lag_fun="Beta",N_c=NULL,K_c=NULL){
+MV=NULL,K=NULL,corr_model="cDCC",lag_fun="Beta",N_c=NULL,K_c=NULL,out_of_sample=NULL){
 
 ################################### checks
 
@@ -1273,9 +2058,9 @@ if(cond_r_t != "list") { stop(
 cat("#Warning:\n Parameter 'r_t' must be a list object. Please provide it in the correct form \n")
 )}
 
-if((univ_model=="GM_noskew"|univ_model=="GM_skew"|univ_model=="DAGM_noskew"|univ_model=="DAGM_skew")&(
-class(MV)!="list"|length(MV)!=length(r_t)|is.null(K))
-) { stop(
+if ((univ_model %in% c("GM_noskew", "GM_skew", "DAGM_noskew", "DAGM_skew")) & 
+(!inherits(MV, "list") | length(MV) != length(r_t) | is.null(K)))
+{ stop(
 cat("#Warning:\n If you want to estimate a GARCH-MIDAS model, please provide parameters MV and K in the correct form \n")
 )}
 
@@ -1306,11 +2091,31 @@ for(i in 1:Num_assets){
 colnames(db)[i]<-colnames(r_t[[i]])
 }
 
+
+################################### in-sample and out-of-sample
+
 TT<-nrow(db)
 
-################################### setting the standard deviation matrix
+if (missing(out_of_sample)){ # out_of_sample parameter is missing
 
 sd_m<-matrix(NA,ncol=Num_assets,nrow=TT)
+
+estim_period<-range(stats::time(db))
+days_period<-stats::time(db)
+est_obs<-nrow(db)
+
+} else {					# out_of_sample parameter is present
+
+sd_m<-matrix(NA,ncol=Num_assets,nrow=TT-out_of_sample)
+db_oos<-db[(TT-out_of_sample+1):TT,]
+sd_m_oos<-matrix(NA,ncol=Num_assets,nrow=out_of_sample)
+
+estim_period<-range(stats::time(db[1:(TT-out_of_sample),]))
+days_period<-stats::time(db[1:(TT-out_of_sample),])
+est_obs<-nrow(db[1:(TT-out_of_sample),])
+
+}
+
 
 ################################### setting the estimation list
 
@@ -1329,11 +2134,29 @@ variance.model=list(model="sGARCH", garchOrder=c(1,1)),
 mean.model=list(armaOrder=c(0,0), include.mean=FALSE),
 distribution.model = distribution)
 
+
+if (missing(out_of_sample)){
+
 for(i in 1:Num_assets){
 u_est<-rugarch::ugarchfit(spec=uspec,data=db[,i])
 est_details[[i]]<-u_est@fit$robust.matcoef
 likelihood_at_max[[i]]<-u_est@fit$LLH
 sd_m[,i]<-u_est@fit$sigma
+}
+
+} else {
+
+for(i in 1:Num_assets){
+u_est<-rugarch::ugarchfit(spec=uspec,data=db[,i],out.sample=out_of_sample)
+est_details[[i]]<-u_est@fit$robust.matcoef
+likelihood_at_max[[i]]<-u_est@fit$LLH
+sd_m[,i]<-u_est@fit$sigma
+sd_m_oos[,i]<-as.numeric(sigma(rugarch::ugarchforecast(u_est,  n.ahead = 1, 
+n.roll = c(out_of_sample-1), 
+out.sample = c(out_of_sample-1))))
+}
+
+
 } 
 } else if (univ_model=="gjrGARCH"){
 
@@ -1342,12 +2165,29 @@ variance.model=list(model="gjrGARCH", garchOrder=c(1,1)),
 mean.model=list(armaOrder=c(0,0), include.mean=FALSE),
 distribution.model = distribution)
 
+if (missing(out_of_sample)){
+
 for(i in 1:Num_assets){
 u_est<-rugarch::ugarchfit(spec=uspec,data=db[,i])
 est_details[[i]]<-u_est@fit$robust.matcoef
 likelihood_at_max[[i]]<-u_est@fit$LLH
 sd_m[,i]<-u_est@fit$sigma
-} 
+}
+
+} else {
+
+for(i in 1:Num_assets){
+u_est<-rugarch::ugarchfit(spec=uspec,data=db[,i],out.sample=out_of_sample)
+est_details[[i]]<-u_est@fit$robust.matcoef
+likelihood_at_max[[i]]<-u_est@fit$LLH
+sd_m[,i]<-u_est@fit$sigma
+sd_m_oos[,i]<-as.numeric(sigma(rugarch::ugarchforecast(u_est,  n.ahead = 1, 
+n.roll = c(out_of_sample-1), 
+out.sample = c(out_of_sample-1))))
+}
+
+
+}
 } else if (univ_model=="eGARCH"){
 
 uspec<-rugarch::ugarchspec(
@@ -1355,12 +2195,29 @@ variance.model=list(model="eGARCH", garchOrder=c(1,1)),
 mean.model=list(armaOrder=c(0,0), include.mean=FALSE),
 distribution.model = distribution)
 
+if (missing(out_of_sample)){
+
 for(i in 1:Num_assets){
 u_est<-rugarch::ugarchfit(spec=uspec,data=db[,i])
 est_details[[i]]<-u_est@fit$robust.matcoef
 likelihood_at_max[[i]]<-u_est@fit$LLH
 sd_m[,i]<-u_est@fit$sigma
-} 
+}
+
+} else {
+
+for(i in 1:Num_assets){
+u_est<-rugarch::ugarchfit(spec=uspec,data=db[,i],out.sample=out_of_sample)
+est_details[[i]]<-u_est@fit$robust.matcoef
+likelihood_at_max[[i]]<-u_est@fit$LLH
+sd_m[,i]<-u_est@fit$sigma
+sd_m_oos[,i]<-as.numeric(sigma(rugarch::ugarchforecast(u_est,  n.ahead = 1, 
+n.roll = c(out_of_sample-1), 
+out.sample = c(out_of_sample-1))))
+}
+
+
+}
 } else if (univ_model=="iGARCH"){
 
 uspec<-rugarch::ugarchspec(
@@ -1368,12 +2225,29 @@ variance.model=list(model="iGARCH", garchOrder=c(1,1)),
 mean.model=list(armaOrder=c(0,0), include.mean=FALSE),
 distribution.model = distribution)
 
+if (missing(out_of_sample)){
+
 for(i in 1:Num_assets){
 u_est<-rugarch::ugarchfit(spec=uspec,data=db[,i])
 est_details[[i]]<-u_est@fit$robust.matcoef
 likelihood_at_max[[i]]<-u_est@fit$LLH
 sd_m[,i]<-u_est@fit$sigma
-} 
+}
+
+} else {
+
+for(i in 1:Num_assets){
+u_est<-rugarch::ugarchfit(spec=uspec,data=db[,i],out.sample=out_of_sample)
+est_details[[i]]<-u_est@fit$robust.matcoef
+likelihood_at_max[[i]]<-u_est@fit$LLH
+sd_m[,i]<-u_est@fit$sigma
+sd_m_oos[,i]<-as.numeric(sigma(rugarch::ugarchforecast(u_est,  n.ahead = 1, 
+n.roll = c(out_of_sample-1), 
+out.sample = c(out_of_sample-1))))
+}
+
+
+}
 } else if (univ_model=="csGARCH"){
 
 uspec<-rugarch::ugarchspec(
@@ -1381,54 +2255,128 @@ variance.model=list(model="csGARCH", garchOrder=c(1,1)),
 mean.model=list(armaOrder=c(0,0), include.mean=FALSE),
 distribution.model = distribution)
 
+if (missing(out_of_sample)){
+
 for(i in 1:Num_assets){
 u_est<-rugarch::ugarchfit(spec=uspec,data=db[,i])
 est_details[[i]]<-u_est@fit$robust.matcoef
 likelihood_at_max[[i]]<-u_est@fit$LLH
 sd_m[,i]<-u_est@fit$sigma
-} 
+}
+
+} else {
+
+for(i in 1:Num_assets){
+u_est<-rugarch::ugarchfit(spec=uspec,data=db[,i],out.sample=out_of_sample)
+est_details[[i]]<-u_est@fit$robust.matcoef
+likelihood_at_max[[i]]<-u_est@fit$LLH
+sd_m[,i]<-u_est@fit$sigma
+sd_m_oos[,i]<-as.numeric(sigma(rugarch::ugarchforecast(u_est,  n.ahead = 1, 
+n.roll = c(out_of_sample-1), 
+out.sample = c(out_of_sample-1))))
+}
+
+
+}
 } else if (univ_model=="GM_noskew"){ 
+
+if (missing(out_of_sample)){
 
 for(i in 1:Num_assets){
 u_est<-rumidas::ugmfit(model="GM",skew="NO",distribution=distribution,db[,i],MV[[i]],K=K,lag_fun=lag_fun)
 est_details[[i]]<-u_est$rob_coef_mat
 likelihood_at_max[[i]]<-u_est$loglik
 sd_m[,i]<-u_est$est_vol_in_s
+
+} 
+
+} else {
+
+for(i in 1:Num_assets){
+u_est<-rumidas::ugmfit(model="GM",skew="NO",distribution=distribution,db[,i],MV[[i]],K=K,lag_fun=lag_fun,out_of_sample=out_of_sample)
+est_details[[i]]<-u_est$rob_coef_mat
+likelihood_at_max[[i]]<-u_est$loglik
+sd_m[,i]<-u_est$est_vol_in_s
+sd_m_oos[,i]<-zoo::coredata(u_est$est_vol_oos)
+} 
 } 
 } else if (univ_model=="GM_skew"){ 
+
+if (missing(out_of_sample)){
 
 for(i in 1:Num_assets){
 u_est<-rumidas::ugmfit(model="GM",skew="YES",distribution=distribution,db[,i],MV[[i]],K=K,lag_fun=lag_fun)
 est_details[[i]]<-u_est$rob_coef_mat
 likelihood_at_max[[i]]<-u_est$loglik
 sd_m[,i]<-u_est$est_vol_in_s
+
 } 
+
+} else {
+
+for(i in 1:Num_assets){
+u_est<-rumidas::ugmfit(model="GM",skew="NO",distribution=distribution,db[,i],MV[[i]],K=K,lag_fun=lag_fun,out_of_sample=out_of_sample)
+est_details[[i]]<-u_est$rob_coef_mat
+likelihood_at_max[[i]]<-u_est$loglik
+sd_m[,i]<-u_est$est_vol_in_s
+sd_m_oos[,i]<-zoo::coredata(u_est$est_vol_oos)
+} 
+} 
+ 
 } else if (univ_model=="DAGM_noskew"){ 
+
+if (missing(out_of_sample)){
 
 for(i in 1:Num_assets){
 u_est<-rumidas::ugmfit(model="DAGM",skew="NO",distribution=distribution,db[,i],MV[[i]],K=K,lag_fun=lag_fun)
 est_details[[i]]<-u_est$rob_coef_mat
 likelihood_at_max[[i]]<-u_est$loglik
 sd_m[,i]<-u_est$est_vol_in_s
-}
+
+} 
+
+} else {
+
+for(i in 1:Num_assets){
+u_est<-rumidas::ugmfit(model="GM",skew="NO",distribution=distribution,db[,i],MV[[i]],K=K,lag_fun=lag_fun,out_of_sample=out_of_sample)
+est_details[[i]]<-u_est$rob_coef_mat
+likelihood_at_max[[i]]<-u_est$loglik
+sd_m[,i]<-u_est$est_vol_in_s
+sd_m_oos[,i]<-zoo::coredata(u_est$est_vol_oos)
+} 
+} 
 } else if (univ_model=="DAGM_skew"){ 
+if (missing(out_of_sample)){
+
 for(i in 1:Num_assets){
 u_est<-rumidas::ugmfit(model="DAGM",skew="YES",distribution=distribution,db[,i],MV[[i]],K=K,lag_fun=lag_fun)
 est_details[[i]]<-u_est$rob_coef_mat
 likelihood_at_max[[i]]<-u_est$loglik
 sd_m[,i]<-u_est$est_vol_in_s
-}
+
+} 
+
+} else {
+
+for(i in 1:Num_assets){
+u_est<-rumidas::ugmfit(model="GM",skew="NO",distribution=distribution,db[,i],MV[[i]],K=K,lag_fun=lag_fun,out_of_sample=out_of_sample)
+est_details[[i]]<-u_est$rob_coef_mat
+likelihood_at_max[[i]]<-u_est$loglik
+sd_m[,i]<-u_est$est_vol_in_s
+sd_m_oos[,i]<-zoo::coredata(u_est$est_vol_oos)
+} 
+} 
 }
 
 cat("First step: completed \n")
 
 ##### standardized residuals
 
+if (missing(out_of_sample)){
+
 D_t<-array(0,dim=c(Num_assets,Num_assets,TT))
 eps_t<-array(0,dim=c(Num_assets,1,TT))
 db_a<-array(NA,dim=c(Num_assets,1,TT))
-
-
 db_no_xts<-zoo::coredata(db)
 
 for(tt in 1:TT){
@@ -1436,6 +2384,35 @@ db_a[,,tt]<-t(db_no_xts[tt,])
 diag(D_t[,,tt])<-sd_m[tt,]
 eps_t[,,tt]<-Inv(D_t[,,tt])%*%db_a[,,tt]
 }
+} else {
+
+## in-sample
+D_t<-array(0,dim=c(Num_assets,Num_assets,TT-out_of_sample))
+eps_t<-array(0,dim=c(Num_assets,1,TT-out_of_sample))
+db_a<-array(NA,dim=c(Num_assets,1,TT-out_of_sample))
+db_no_xts<-zoo::coredata(db[1:(TT-out_of_sample),])
+
+for(tt in 1:(TT-out_of_sample)){
+db_a[,,tt]<-t(db_no_xts[tt,])
+diag(D_t[,,tt])<-sd_m[tt,]
+eps_t[,,tt]<-Inv(D_t[,,tt])%*%db_a[,,tt]
+}
+
+## out-of-sample
+D_t_oos<-array(0,dim=c(Num_assets,Num_assets,out_of_sample))
+eps_t_oos<-array(0,dim=c(Num_assets,1,out_of_sample))
+db_a_oos<-array(NA,dim=c(Num_assets,1,out_of_sample))
+db_no_xts_oos<-zoo::coredata(db_oos)
+
+for(tt in 1:out_of_sample){
+db_a_oos[,,tt]<-t(db_no_xts_oos[tt,])
+diag(D_t_oos[,,tt])<-sd_m_oos[tt,]
+eps_t_oos[,,tt]<-Inv(D_t_oos[,,tt])%*%db_a_oos[,,tt]
+}
+
+
+}
+
 
 ########################################### second step estimation (cDCC, aDCC, DECO or DCC-MIDAS)
 
@@ -1661,21 +2638,84 @@ if(corr_model=="DCCMIDAS"){
 
 dcc_mat_est_fin<-dccmidas_mat_est(est_coef,eps_t,D_t,lag_fun=lag_fun,N_c=N_c,K_c=K_c)
 
+if (!missing(out_of_sample)){
+
+dcc_mat_est_fin_oos<-dccmidas_mat_est(est_coef,eps_t_oos,D_t_oos,
+lag_fun=lag_fun,N_c=N_c,K_c=K_c)
+
+} else {
+
+dcc_mat_est_fin_oos<-list(NA,NA,NA)
+
+}
+
+
 } else if (corr_model=="cDCC") {
 
 dcc_mat_est_fin<-dcc_mat_est(est_coef,eps_t,D_t,K_c=K_c)
+
+
+if (!missing(out_of_sample)){
+
+dcc_mat_est_fin_oos<-dcc_mat_est(est_coef,
+eps_t_oos,D_t_oos,K_c=K_c)
+
+} else {
+
+dcc_mat_est_fin_oos<-list(NA,NA)
+
+}
+
 
 } else if (corr_model=="aDCC") {
 
 dcc_mat_est_fin<-a_dcc_mat_est(est_coef,eps_t,D_t,K_c=K_c)
 
+
+if (!missing(out_of_sample)){
+
+dcc_mat_est_fin_oos<-a_dcc_mat_est(est_coef,
+eps_t_oos,D_t_oos,K_c=K_c)
+
+} else {
+
+dcc_mat_est_fin_oos<-list(NA,NA)
+
+}
+
+
+
 } else if (corr_model=="ADCCMIDAS") {
 
 dcc_mat_est_fin<-a_dccmidas_mat_est(est_coef,eps_t,D_t,lag_fun=lag_fun,N_c=N_c,K_c=K_c)
 
+if (!missing(out_of_sample)){
+
+dcc_mat_est_fin_oos<-a_dccmidas_mat_est(est_coef,
+eps_t_oos,D_t_oos,lag_fun=lag_fun,N_c=N_c,K_c=K_c)
+
+} else {
+
+dcc_mat_est_fin_oos<-list(NA,NA,NA)
+
+}
+
+
 } else if (corr_model=="DECO") {
 
 dcc_mat_est_fin<-deco_mat_est(est_coef,eps_t,D_t,K_c=K_c)
+
+
+if (!missing(out_of_sample)){
+
+dcc_mat_est_fin_oos<-deco_mat_est(est_coef,
+eps_t_oos,D_t_oos,K_c=K_c)
+
+} else {
+
+dcc_mat_est_fin_oos<-list(NA,NA)
+
+}
 
 }
 
@@ -1691,13 +2731,16 @@ model=univ_model,
 est_univ_model=est_details,
 corr_coef_mat=mat_coef,
 mult_model=corr_model,
-obs=nrow(db),
-period=range(stats::time(db)),
+obs=est_obs,
+period=estim_period,
 "H_t"=dcc_mat_est_fin[[1]],
 "R_t"=dcc_mat_est_fin[[2]],
 "R_t_bar"=dcc_mat_est_fin[[3]],
+"H_t_oos"=dcc_mat_est_fin_oos[[1]],
+"R_t_oos"=dcc_mat_est_fin_oos[[2]],
+"R_t_bar_oos"=dcc_mat_est_fin_oos[[3]],
 est_time=end,
-Days=stats::time(db),
+Days=days_period,
 llk=stats::logLik(m_est)
 )
 } else {
@@ -1707,12 +2750,14 @@ model=univ_model,
 est_univ_model=est_details,
 corr_coef_mat=mat_coef,
 mult_model=corr_model,
-obs=nrow(db),
-period=range(stats::time(db)),
+obs=est_obs,
+period=estim_period,
 "H_t"=dcc_mat_est_fin[[1]],
 "R_t"=dcc_mat_est_fin[[2]],
+"H_t_oos"=dcc_mat_est_fin_oos[[1]],
+"R_t_oos"=dcc_mat_est_fin_oos[[2]],
 est_time=end,
-Days=stats::time(db),
+Days=days_period,
 llk=stats::logLik(m_est)
 )
 }
@@ -1741,10 +2786,13 @@ print.dccmidas(fin_res)
 #' @examples
 #' \donttest{
 #' require(xts)
-#' # open to close daily log-returns
-#' r_t_s<-log(sp500['2010/2019'][,3])-log(sp500['2010/2019'][,1])
-#' r_t_n<-log(nasdaq['2010/2019'][,3])-log(nasdaq['2010/2019'][,1])
-#' r_t_f<-log(ftse100['2010/2019'][,3])-log(ftse100['2010/2019'][,1])
+#' # close to close daily log-returns
+#' r_t_s<-diff(log(sp500['2010/2019'][,3]))
+#' r_t_s[1]<-0
+#' r_t_n<-diff(log(nasdaq['2010/2019'][,3]))
+#' r_t_n[1]<-0
+#' r_t_f<-diff(log(ftse100['2010/2019'][,3]))
+#' r_t_f[1]<-0
 #' db_m<-merge.xts(r_t_s,r_t_n,r_t_f)
 #' db_m<-db_m[complete.cases(db_m),]
 #' colnames(db_m)<-c("S&P500","NASDAQ","FTSE100")
@@ -1757,7 +2805,6 @@ print.dccmidas(fin_res)
 #' corr_model="DCCMIDAS",N_c=N_c,K_c=K_c)
 #' cov_eval(cdcc_est$H_t,r_t=r_t)[(K_c+1):dim(cdcc_est$H_t)[3]]
 #' }
-
 #' @export
 
 cov_eval<-function(H_t,cov_proxy=NULL,r_t=NULL,loss="FROB"){
@@ -1775,7 +2822,7 @@ cat("#Warning:\n Parameter 'r_t' must be a list object. Please provide it in the
 )}
 
 
-if(!is.null(cov_proxy)&class(cov_proxy) != "array") { stop(
+if(!is.null(cov_proxy)&!inherits(cov_proxy, "array")) { stop(
 cat("#Warning:\n Parameter 'cov_proxy' must be an array object. Please provide it in the correct form \n")
 )}
 
@@ -1891,6 +2938,288 @@ return(loss_v)
 
 }
 
+#' BEKK fit 
+#'
+#' Obtains the estimation the scalar and diagonal BEKK model
+#' @param r_t List of daily returns. At the moment, at most 5 assets can be considered
+#' @param model Valid choices are: 'sBEKK'(scalar BEKK) and 'dBEKK' (diagonal BEKK)
+#' @param R **optional** Number of random samples drawn from a Uniform distribution used
+#' to inizialize the log-likelihood. Equal to 100 by default
+#' @param out_of_sample **optional** A positive integer indicating the number of periods before the last to keep for out of sample forecasting
+#' @return \code{bekk_fit} returns a list containing the following components:
+#' \itemize{
+#' 	\item assets: Names of the assets considered.
+#'   \item mat_coef: Matrix of estimated coefficients of the model, with the QML standard errors.
+#'   \item obs: The number of daily observations used for the estimation.
+#'   \item period: The period of the estimation.
+#'   \item H_t: Conditional covariance matrix, reported as an array. It refers to the in-sample
+#'   period.
+#'   \item est_time: Time of estimation.
+#'   \item llk: The value of the log-likelihood at the maximum.
+#'   \item H_t_oos: Conditional covariance matrix, reported as an array, for the out-of-sample period,
+#'  if the param 'out_of_sample' is used.
+#'  \item Days: Days of the (in-)sample period.
+#' }
+#' @importFrom Rdpack reprompt
+#' @importFrom stats runif
+#' @details
+#' Function \code{bekk_fit} implements the estimation of scalar and diagonal BEKK models. For details on BEKK models, see \insertCite{engle1995multivariate;textual}{dccmidas}
+#' @references
+#' \insertAllCited{} 
+#' @examples
+#' \donttest{
+#' require(xts)
+#' # close to close daily log-returns
+#' r_t_s<-diff(log(sp500['2010/2019'][,3]))
+#' r_t_s[1]<-0
+#' r_t_n<-diff(log(nasdaq['2010/2019'][,3]))
+#' r_t_n[1]<-0
+#' r_t_f<-diff(log(ftse100['2010/2019'][,3]))
+#' r_t_f[1]<-0
+#' db_m<-merge.xts(r_t_s,r_t_n,r_t_f)
+#' db_m<-db_m[complete.cases(db_m),]
+#' colnames(db_m)<-c("S&P500","NASDAQ","FTSE100")
+#' # list of returns
+#' r_t<-list(db_m[,1],db_m[,2],db_m[,3])
+#' bekk_est<-bekk_fit(r_t,model="sBEKK")
+#' bekk_est$mat_coef
+#' }
+#' @export
+
+bekk_fit<-function(r_t,model="sBEKK",R=100, out_of_sample = NULL){
+
+################################### checks
+
+cond_r_t<- class(r_t)
+
+if(cond_r_t != "list") { stop(
+cat("#Warning:\n Parameter 'r_t' must be a list object. Please provide it in the correct form \n")
+)}
+
+if(length(r_t) > 5) { stop(
+cat("#Warning:\n Parameter 'r_t' has to have at most five assets.  \n")
+)}
+
+################################### merge (eventually)
+
+Num_assets<-length(r_t)
+
+len<-rep(NA,Num_assets)
+
+for(i in 1:Num_assets){
+len[i]<-length(r_t[[i]])
+}
+
+
+db<- do.call(xts::merge.xts,r_t)
+db<-db[stats::complete.cases(db),] 
+
+for(i in 1:Num_assets){
+colnames(db)[i]<-colnames(r_t[[i]])
+}
+
+################################### in-sample and out-of-sample
+
+TT<-nrow(db)
+
+if (missing(out_of_sample)){ # out_of_sample parameter is missing
+
+db_est<-db
+estim_period<-range(stats::time(db_est))
+days_period<-stats::time(db_est)
+
+} else {					# out_of_sample parameter is present
+
+db_est<-db[1:(TT-out_of_sample),]
+db_oos<-db[(TT-out_of_sample+1):TT,]
+
+estim_period<-range(stats::time(db_est))
+days_period<-stats::time(db_est[1:(TT-out_of_sample),])
+
+
+}
+
+db<-db_est
+
+################################### setting the estimation list
+
+start<-Sys.time()
+
+########################################### scalar BEKK
+
+if(model=="sBEKK"){
+
+start_val<-NULL
+
+num_param<-ifelse(ncol(db)==2,5,ifelse(ncol(db)==3,8,ifelse(ncol(db)==4,12,17)))
+
+start_val<-rep(0.1,num_param)
+
+if (num_param==5){
+
+names(start_val)<-c("c_11","c_21","c_22","a","b")
+
+} else if (num_param==8){
+
+names(start_val)<-c("c_11","c_21","c_22","c_31","c_32","c_33","a","b")
+
+} else if (num_param==12) {
+
+names(start_val)<-c("c_11","c_21","c_22","c_31","c_32","c_33",
+"c_41","c_42","c_43","c_44","a","b")
+
+} else if (num_param==17) {
+
+names(start_val)<-c("c_11","c_21","c_22","c_31","c_32","c_33",
+"c_41","c_42","c_43","c_44","c_51","c_52","c_53","c_54","c_55","a","b")
+
+}
+
+#### best starting values
+
+mat_start_val<-matrix(stats::runif(num_param*R),ncol=R,nrow=num_param)
+ll_start<-rep(NA,R)
+
+for(i in 1:R){
+ll_start[i]<-sum(sBEKK_loglik(mat_start_val[,i],zoo::coredata(db)))
+}
+
+start_val_f<-mat_start_val[,which.max(ll_start)]
+names(start_val_f)<-names(start_val)
+
+m_est<-maxLik(logLik=sBEKK_loglik,
+start=start_val_f,
+ret=zoo::coredata(db),
+iterlim=1000,
+method="BFGS") 
+
+H_t_est<-sBEKK_mat_est(stats::coef(m_est),zoo::coredata(db))
+
+
+if (missing(out_of_sample)){ # out_of_sample parameter is missing
+
+H_t_oos<-NA
+
+} else {					# out_of_sample parameter is present
+
+H_t_oos<-sBEKK_mat_est(stats::coef(m_est),zoo::coredata(db_oos))
+
+}
+
+
+
+} else if (model=="dBEKK"){
+
+start_val<-NULL
+
+num_param<-ifelse(ncol(db)==2,7,ifelse(ncol(db)==3,12,ifelse(ncol(db)==4,18,25)))
+
+start_val<-rep(0.5,num_param)
+
+if (num_param==7){
+
+names(start_val)<-c("c_11","c_21","c_22","a_11","a_22","b_11","b_22")
+
+} else if (num_param==12){
+
+names(start_val)<-c("c_11","c_21","c_22","c_31","c_32","c_33",
+"a_11","a_22","a_33","b_11","b_22","b_33")
+
+} else if (num_param==18) {
+
+names(start_val)<-c("c_11","c_21","c_22","c_31","c_32","c_33",
+"c_41","c_42","c_43","c_44",
+"a_11","a_22","a_33","a_44","b_11","b_22","b_33","b_44")
+
+} else if (num_param==25) {
+
+names(start_val)<-c("c_11","c_21","c_22","c_31","c_32","c_33",
+"c_41","c_42","c_43","c_44",
+"c_51","c_52","c_53","c_54","c_55",
+"a_11","a_22","a_33","a_44","a_55","b_11","b_22","b_33","b_44","b_55")
+
+}
+
+ui<-matrix(0,ncol=num_param,nrow=4)
+
+ui[1,which(names(start_val)=="a_11")]<-1
+ui[2,which(names(start_val)=="b_11")]<-1
+ui[3,which(names(start_val)=="a_22")]<-1
+ui[4,which(names(start_val)=="b_22")]<-1
+
+ci<-c(-0.0001,-0.001,-0.0001,-0.001)
+
+#### best starting values
+
+mat_start_val<-matrix(stats::runif(num_param*R),ncol=R,nrow=num_param)
+ll_start<-rep(NA,R)
+
+for(i in 1:R){
+ll_start[i]<-sum(dBEKK_loglik(mat_start_val[,i],zoo::coredata(db)))
+}
+
+start_val_f<-mat_start_val[,which.max(ll_start)]
+names(start_val_f)<-names(start_val)
+
+
+m_est<-suppressWarnings(maxLik(logLik=dBEKK_loglik,
+start=start_val_f,
+ret=zoo::coredata(db),
+iterlim=1000,
+constraints=list(ineqA=ui, ineqB=ci),
+method="BFGS"))
+
+H_t_est<-dBEKK_mat_est(stats::coef(m_est),zoo::coredata(db))
+
+if (missing(out_of_sample)){ # out_of_sample parameter is missing
+
+H_t_oos<-NA
+
+} else {					# out_of_sample parameter is present
+
+H_t_oos<-sBEKK_mat_est(stats::coef(m_est),zoo::coredata(db_oos))
+
+}
+
+
+} 
+
+###### matrix of coefficients 
+
+est_coef<-stats::coef(m_est)
+N_coef<-length(est_coef)
+
+mat_coef<-data.frame(rep(NA,N_coef),rep(NA,N_coef),rep(NA,N_coef),rep(NA,N_coef))
+colnames(mat_coef)<-c("Estimate","Std. Error","t value","Pr(>|t|)")
+
+rownames(mat_coef)<-names(est_coef)
+
+mat_coef[,1]<-round(est_coef,6)
+mat_coef[,2]<-round(QMLE_sd(m_est),6)
+mat_coef[,3]<-round(est_coef/QMLE_sd(m_est),6)
+mat_coef[,4]<-round(apply(rbind(est_coef/QMLE_sd(m_est)),1,function(x) 2*(1-stats::pnorm(abs(x)))),6)
+
+######
+
+end<-Sys.time()-start
+
+fin_res<-list(
+assets=colnames(db),
+mat_coef=mat_coef,
+obs=nrow(db),
+period=estim_period,
+H_t=H_t_est,
+est_time=end,
+llk=stats::logLik(m_est),
+H_t_oos=H_t_oos,
+Days=days_period
+)
+
+return(fin_res)
+
+}
+
+
 #' Plot method for 'dccmidas' class
 #'
 #' Plots of the conditional volatilities on the main diagonal and of the conditional correlations on the
@@ -1907,10 +3236,13 @@ return(loss_v)
 #' @examples
 #' \donttest{
 #' require(xts)
-#' # open to close daily log-returns
-#' r_t_s<-log(sp500['2010/2019'][,3])-log(sp500['2010/2019'][,1])
-#' r_t_n<-log(nasdaq['2010/2019'][,3])-log(nasdaq['2010/2019'][,1])
-#' r_t_f<-log(ftse100['2010/2019'][,3])-log(ftse100['2010/2019'][,1])
+#' # close to close daily log-returns
+#' r_t_s<-diff(log(sp500['2010/2019'][,3]))
+#' r_t_s[1]<-0
+#' r_t_n<-diff(log(nasdaq['2010/2019'][,3]))
+#' r_t_n[1]<-0
+#' r_t_f<-diff(log(ftse100['2010/2019'][,3]))
+#' r_t_f[1]<-0
 #' db_m<-merge.xts(r_t_s,r_t_n,r_t_f)
 #' db_m<-db_m[complete.cases(db_m),]
 #' colnames(db_m)<-c("S&P500","NASDAQ","FTSE100")

@@ -19,7 +19,7 @@
 #' @references
 #' \insertAllCited{} 
 #'
-#' @source Realized library of the \href{https://realized.oxford-man.ox.ac.uk/data/download}{Oxford-Man Institute}
+#' @source Realized library of the Oxford-Man Institute
 #'
 #' @examples
 #' head(sp500)
@@ -47,7 +47,7 @@
 #' @references
 #' \insertAllCited{} 
 #'
-#' @source Realized library of the \href{https://realized.oxford-man.ox.ac.uk/data/download}{Oxford-Man Institute}
+#' @source Realized library of the Oxford-Man Institute
 #'
 #' @examples
 #' head(ftse100)
@@ -75,7 +75,7 @@
 #' @references
 #' \insertAllCited{} 
 #'
-#' @source Realized library of the \href{https://realized.oxford-man.ox.ac.uk/data/download}{Oxford-Man Institute}
+#' @source Realized library of the Oxford-Man Institute
 #'
 #' @examples
 #' head(nasdaq)

@@ -13,7 +13,8 @@ dcc_fit(
   corr_model = "cDCC",
   lag_fun = "Beta",
   N_c = NULL,
-  K_c = NULL
+  K_c = NULL,
+  out_of_sample = NULL
 )
 }
 \arguments{
@@ -47,6 +48,8 @@ MIDAS term and/or if 'corr_model' is "DCCMIDAS"}
 \item{N_c}{\strong{optional} Number of (lagged) realizations to use for the standarized residuals forming the long-run correlation, if 'corr_model' is "DCCMIDAS"}
 
 \item{K_c}{\strong{optional} Number of (lagged) realizations to use for the long-run correlation, if 'corr_model' is "DCCMIDAS"}
+
+\item{out_of_sample}{\strong{optional} A positive integer indicating the number of periods before the last to keep for out of sample forecasting}
 }
 \value{
 \code{dcc_fit} returns an object of class 'dccmidas'. The function \code{\link{summary.dccmidas}}
@@ -58,12 +61,15 @@ can be used to print a summary of the results. Moreover, an object of class 'dcc
 \item corr_coef_mat: Matrix of estimated coefficients of the correlation model, with the QML standard errors.
 \item mult_model: Correlation model used in the second step.
 \item obs: The number of daily observations used for the estimation.
-\item period: The period of the estimation.
+\item period: The period of the (in-sample) estimation.
 \item H_t: Conditional covariance matrix, reported as an array.
 \item R_t: Conditional correlation matrix, reported as an array.
 \item R_t_bar: Conditional long-run correlation matrix, reported as an array, if the correlation matrix includes a MIDAS specification.
+\item H_t_oos: Conditional covariance matrix, reported as an array, for the out-of-sample period, if present.
+\item R_t_oos: Conditional correlation matrix, reported as an array, for the out-of-sample period, if present.
+\item R_t_bar_oos: Conditional long-run correlation matrix, reported as an array, if the correlation matrix includes a MIDAS specification, for the out-of-sample period, if present.
 \item est_time: Time of estimation.
-\item Days: Days of the sample period.
+\item Days: Days of the (in-)sample period.
 \item llk: The value of the log-likelihood (for the second step) at the maximum.
 }
 }
@@ -86,10 +92,14 @@ respectively, without and with the asymmetric term in the short-run component).
 \examples{
 \donttest{
 require(xts)
-# open to close daily log-returns
-r_t_s<-log(sp500['2005/2008'][,3])-log(sp500['2005/2008'][,1])
-r_t_n<-log(nasdaq['2005/2008'][,3])-log(nasdaq['2005/2008'][,1])
-r_t_f<-log(ftse100['2005/2008'][,3])-log(ftse100['2005/2008'][,1])
+# daily log-returns
+# close to close daily log-returns
+r_t_s<-diff(log(sp500['2010/2019'][,3]))
+r_t_s[1]<-0
+r_t_n<-diff(log(nasdaq['2010/2019'][,3]))
+r_t_n[1]<-0
+r_t_f<-diff(log(ftse100['2010/2019'][,3]))
+r_t_f[1]<-0
 db_m<-merge.xts(r_t_s,r_t_n,r_t_f)
 db_m<-db_m[complete.cases(db_m),]
 colnames(db_m)<-c("S&P500","NASDAQ","FTSE100")

@@ -39,10 +39,13 @@ extra-diagonal elements.
 \examples{
 \donttest{
 require(xts)
-# open to close daily log-returns
-r_t_s<-log(sp500['2010/2019'][,3])-log(sp500['2010/2019'][,1])
-r_t_n<-log(nasdaq['2010/2019'][,3])-log(nasdaq['2010/2019'][,1])
-r_t_f<-log(ftse100['2010/2019'][,3])-log(ftse100['2010/2019'][,1])
+# close to close daily log-returns
+r_t_s<-diff(log(sp500['2010/2019'][,3]))
+r_t_s[1]<-0
+r_t_n<-diff(log(nasdaq['2010/2019'][,3]))
+r_t_n[1]<-0
+r_t_f<-diff(log(ftse100['2010/2019'][,3]))
+r_t_f[1]<-0
 db_m<-merge.xts(r_t_s,r_t_n,r_t_f)
 db_m<-db_m[complete.cases(db_m),]
 colnames(db_m)<-c("S&P500","NASDAQ","FTSE100")

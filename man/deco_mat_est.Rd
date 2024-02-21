@@ -7,11 +7,13 @@
 deco_mat_est(est_param, res, Dt, K_c = NULL)
 }
 \arguments{
-\item{res}{Array of standardized daily returns, coming from the first step estimation.}
+\item{est_param}{Vector of estimated values}
+
+\item{res}{Array of standardized daily returns, coming from the first step estimation}
+
+\item{Dt}{Diagonal matrix of standard deviations}
 
 \item{K_c}{\strong{optional} Number of initial observations to exclude from the H_t and R_t calculation}
-
-\item{param}{Vector of estimated values.}
 }
 \value{
 A list with the \eqn{H_t} and \eqn{R_t} matrices, for each \eqn{t}.
